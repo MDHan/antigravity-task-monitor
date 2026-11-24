@@ -276,9 +276,9 @@ export function parseTranscript(convId, transcriptPath) {
           matchedOp && matchedOp.summary && matchedOp.summary !== "run_command"
             ? matchedOp.summary
             : rawDesc.slice(0, 80);
-        const isTimer = matchedOp?.tool === "schedule";
-        const expectedDurationSec =
-          isTimer && matchedOp?.args?.DurationSeconds ? Number(matchedOp.args.DurationSeconds) : null;
+        const timerMatch = friendlyTitle.match(/^\[(\d+)s\]/);
+        const isTimer = matchedOp?.tool === "schedule" || Boolean(timerMatch);
+        const expectedDurationSec = timerMatch ? Number(timerMatch[1]) : null;
         bgTasks.set(taskId, {
           taskId,
           turnIndex: currentTurn.turnIndex,
