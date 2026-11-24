@@ -276,6 +276,9 @@ export function parseTranscript(convId, transcriptPath) {
           matchedOp && matchedOp.summary && matchedOp.summary !== "run_command"
             ? matchedOp.summary
             : rawDesc.slice(0, 80);
+        const isTimer = matchedOp?.tool === "schedule";
+        const expectedDurationSec =
+          isTimer && matchedOp?.args?.DurationSeconds ? Number(matchedOp.args.DurationSeconds) : null;
         bgTasks.set(taskId, {
           taskId,
           turnIndex: currentTurn.turnIndex,
@@ -284,6 +287,8 @@ export function parseTranscript(convId, transcriptPath) {
           startedIso: d.created_at || null,
           title: friendlyTitle,
           description: rawDesc,
+          isTimer,
+          expectedDurationSec,
           status: d.status === "RUNNING" ? "running" : "done",
           lastUpdateMs: tsMs,
           lastNote: "",
@@ -308,7 +313,11 @@ export function parseTranscript(convId, transcriptPath) {
           lower.includes("failed") ||
           lower.includes("killed") ||
           lower.includes("canceled") ||
-          lower.includes("cancelled")
+          lower.includes("cancelled") ||
+          lower.includes("expired") ||
+          lower.includes("timer") ||
+          lower.includes("triggered") ||
+          lower.includes("fired")
         ) {
           task.status = "done";
           task.lastNote = "已结束";
@@ -419,11 +428,17 @@ export function getConversationDetail(dataDir, convId, opts = {}) {
   // Current turn background tasks (+ any still-running background tasks in this conversation)
   const curBgIds = new Set(curTurn?.bgTaskIds || []);
   const currentBgTasks = Object.values(bgMap)
+    .map((t) => {
+      const elapsedSec = t.startedAtMs ? Math.max(0, Math.round((nowMs - t.startedAtMs) / 1000)) : null;
+      let status = t.status;
+      let lastNote = t.lastNote;
+      if (status === "running" && t.isTimer && t.expectedDurationSec && elapsedSec !== null && elapsedSec > t.expectedDurationSec + 10) {
+        status = "done";
+        lastNote = "已触发";
+      }
+      return { ...t, status, lastNote, elapsedSec };
+    })
     .filter((t) => curBgIds.has(t.taskId) || t.status === "running")
-    .map((t) => ({
-      ...t,
-      elapsedSec: t.startedAtMs ? Math.max(0, Math.round((nowMs - t.startedAtMs) / 1000)) : null,
-    }))
     .sort((a, b) => (b.startedAtMs || 0) - (a.startedAtMs || 0));
 
   const runningBgCount = currentBgTasks.filter((t) => t.status === "running").length;
