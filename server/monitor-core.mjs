@@ -473,36 +473,42 @@ export function getConversationDetail(dataDir, convId, opts = {}) {
   const replyNotes = curNotes.filter((n) => n.kind === "reply");
   const thoughtNotes = curNotes.filter((n) => n.kind === "thought");
 
-  // Previous turns -> clean, high-value History list (newest first)
+  // Previous turns -> clean summary list + full drill-down detail for each turn (newest first)
   const historyTurns = turns
     .slice(0, -1)
     .reverse()
     .map((t) => {
-      const tReplies = t.notes.filter((n) => n.kind === "reply");
-      const lastReply = tReplies[tReplies.length - 1];
+      const tReplies = t.notes.filter((n) => n.kind === "reply").reverse();
+      const lastReply = tReplies[0];
       const dur =
         t.startedAtMs && t.lastActivityMs
           ? Math.max(0, Math.round((t.lastActivityMs - t.startedAtMs) / 1000))
           : 0;
-      const tBgs = (t.bgTaskIds || []).map((id) => bgMap[id]).filter(Boolean);
+      const tBgs = (t.bgTaskIds || [])
+        .map((id) => bgMap[id])
+        .filter(Boolean)
+        .map((b) => ({
+          ...b,
+          elapsedSec: b.startedAtMs ? Math.max(0, Math.round((nowMs - b.startedAtMs) / 1000)) : null,
+        }));
 
-      // Deduplicated edited/created files & key commands & errors
       const editedFiles = [];
       const seenFiles = new Set();
-      const keyCommands = [];
+      let cmdCount = 0;
       let errorCount = 0;
       for (const o of t.operations) {
         if (o.isError) errorCount += 1;
         if (o.category === "edit" && o.summary && !seenFiles.has(o.summary)) {
           seenFiles.add(o.summary);
           editedFiles.push(o.summary);
-        } else if (o.category === "command" && o.summary) {
-          keyCommands.push({ summary: o.summary, isError: o.isError, durationSec: o.durationSec });
+        } else if (o.category === "command") {
+          cmdCount += 1;
         }
       }
 
-      const stepsTotal = t.latestSteps?.length || 0;
-      const stepsDone = (t.latestSteps || []).filter((s) => s.status === "done").length;
+      const steps = t.latestSteps || [];
+      const stepsTotal = steps.length;
+      const stepsDone = steps.filter((s) => s.status === "done").length;
 
       return {
         turnIndex: t.turnIndex,
@@ -510,15 +516,22 @@ export function getConversationDetail(dataDir, convId, opts = {}) {
         startedAtMs: t.startedAtMs,
         durationSec: dur,
         stepCount: t.stepCount,
+        latestFocus: t.latestFocus || "",
         summary: lastReply?.summary || t.latestFocus || "",
-        replyText: lastReply?.text ? lastReply.text.slice(0, 360) : "",
+        replies: tReplies.slice(0, 10),
+        steps,
         stepsTotal,
         stepsDone,
-        editedFiles: editedFiles.slice(0, 8),
-        keyCommands: keyCommands.slice(-5).reverse(),
+        editedFiles: editedFiles.slice(0, 16),
+        cmdCount,
         errorCount,
         opCount: t.operations.length,
         bgCount: tBgs.length,
+        backgroundTasks: tBgs,
+        operations: t.operations
+          .filter((o) => o.category !== "status")
+          .reverse()
+          .slice(0, 40),
       };
     });
 

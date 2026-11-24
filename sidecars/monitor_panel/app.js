@@ -16,11 +16,13 @@
     search: `<svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`,
     chevronRight: `<svg class="ic ic-sm" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>`,
     chevronDown: `<svg class="ic ic-sm" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>`,
+    chevronLeft: `<svg class="ic ic-sm" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>`,
   };
 
   const state = {
     data: null,
     activeTab: "overview", // overview | notes | timeline | history
+    selectedHistoryTurn: null, // turnIndex for drill-down view
     showRawThoughts: false,
     toolFilter: "all",
     search: "",
@@ -28,7 +30,6 @@
     expandedOps: new Set(),
     expandedBg: new Set(),
     expandedNotes: new Set(),
-    expandedHistory: new Set(),
     polling: false,
     error: null,
     lastConvId: "",
@@ -190,45 +191,127 @@
     `;
   }
 
-  function renderHistoryTurn(ht) {
-    const key = `ht-${ht.turnIndex}`;
-    const isExp = state.expandedHistory.has(key);
-    const files = ht.editedFiles || [];
-    const cmds = ht.keyCommands || [];
+  function renderHistoryCard(ht) {
     const metaBadges = [
       ht.stepsTotal > 0 ? `步骤 ${ht.stepsDone}/${ht.stepsTotal}` : "",
-      files.length > 0 ? `改了 ${files.length} 个文件` : "",
-      cmds.length > 0 ? `${cmds.length} 次命令` : "",
-      ht.bgCount > 0 ? `${ht.bgCount} 个后台` : "",
-      ht.errorCount > 0 ? `${ht.errorCount} 个报错` : "",
+      (ht.editedFiles || []).length > 0 ? `改 ${ht.editedFiles.length} 文件` : "",
+      ht.cmdCount > 0 ? `${ht.cmdCount} 命令` : "",
+      ht.bgCount > 0 ? `${ht.bgCount} 后台` : "",
     ].filter(Boolean);
 
     return `
-      <div class="note-card" data-ht-key="${esc(key)}">
+      <div class="note-card" data-ht-open="${ht.turnIndex}">
         <div class="note-head">
           <span class="note-ic">${ICONS.history}</span>
           <span class="tag-inline tag-muted">第 ${ht.turnIndex} 轮</span>
           <span class="mono note-time">${fmtShortTime(ht.startedAtMs)} · ${fmtDuration(ht.durationSec)}</span>
           ${ht.errorCount > 0 ? `<span class="tag-inline" style="background:var(--danger-bg);color:var(--danger)">有报错</span>` : ""}
-          <span class="chevron" style="margin-left:auto">${isExp ? ICONS.chevronDown : ICONS.chevronRight}</span>
+          <span class="chevron" style="margin-left:auto">${ICONS.chevronRight}</span>
         </div>
         <div class="note-sum">${esc(cleanLabel(ht.prompt, 56))}</div>
-        ${
-          isExp
-            ? `<div class="history-body">` +
-              (ht.summary ? `<div class="hist-summary">${esc(ht.summary)}</div>` : "") +
-              (metaBadges.length > 0 ? `<div class="hist-stats">${metaBadges.map((b) => `<span>${esc(b)}</span>`).join("<span>·</span>")}</div>` : "") +
-              (files.length > 0
-                ? `<div><div class="hist-block-label">改动文件</div><div class="file-pills">${files.map((f) => `<span class="file-pill"><span class="cat-ic-edit">${ICONS.edit}</span><span class="mono">${esc(f)}</span></span>`).join("")}</div></div>`
-                : "") +
-              (cmds.length > 0
-                ? `<div><div class="hist-block-label">关键命令</div><div class="hist-cmd-list">${cmds.map((c) => `<div class="hist-cmd"><span class="${c.isError ? "ic-danger" : "cat-ic-command"}">${c.isError ? ICONS.error : ICONS.terminal}</span><span class="hist-cmd-text">${esc(cleanLabel(c.summary, 40))}</span>${c.durationSec !== null && c.durationSec !== undefined ? `<span class="mono op-meta">${c.durationSec}s</span>` : ""}</div>`).join("")}</div></div>`
-                : "") +
-              (!ht.summary && files.length === 0 && cmds.length === 0 ? `<div class="empty-inline">本轮为纯问答，无文件或命令改动</div>` : "") +
-              `</div>`
-            : ""
-        }
+        ${ht.summary ? `<div class="hist-preview">${esc(ht.summary)}</div>` : ""}
+        ${metaBadges.length > 0 ? `<div class="hist-stats" style="margin-top:5px">${metaBadges.map((b) => `<span>${esc(b)}</span>`).join("<span>·</span>")}</div>` : ""}
       </div>
+    `;
+  }
+
+  function renderHistoryDetail(ht) {
+    const files = ht.editedFiles || [];
+    const steps = ht.steps || [];
+    const replies = ht.replies || [];
+    const bgs = ht.backgroundTasks || [];
+    const ops = ht.operations || [];
+
+    return `
+      <div class="detail-topbar">
+        <button id="btn-back-history" class="back-btn">${ICONS.chevronLeft}<span>返回历史列表</span></button>
+        <span class="mono note-time">第 ${ht.turnIndex} 轮 · ${fmtShortTime(ht.startedAtMs)}</span>
+      </div>
+
+      <div class="prompt-card">
+        <div class="prompt-text">${esc(ht.prompt)}</div>
+        <div class="hist-stats">
+          <span>耗时 <strong>${fmtDuration(ht.durationSec)}</strong></span>
+          <span>·</span>
+          <span>${ht.stepCount} 步</span>
+          ${ht.opCount > 0 ? `<span>·</span><span>${ht.opCount} 次操作</span>` : ""}
+          ${ht.errorCount > 0 ? `<span>·</span><span style="color:var(--danger)">${ht.errorCount} 个报错</span>` : ""}
+        </div>
+      </div>
+
+      ${
+        replies.length > 0
+          ? `
+        <div class="section">
+          <div class="sec-head">
+            <span class="sec-label">阶段进展与结论</span>
+            <span class="sec-meta">${replies.length} 条</span>
+          </div>
+          <div class="notes-list">${replies.map((r, idx) => renderNoteRow(r, idx + 1000)).join("")}</div>
+        </div>
+      `
+          : ""
+      }
+
+      ${
+        steps.length > 0
+          ? `
+        <div class="section">
+          <div class="sec-head">
+            <span class="sec-label">执行步骤</span>
+            <span class="sec-meta mono">${ht.stepsDone}/${ht.stepsTotal}</span>
+          </div>
+          <div class="steps">
+            ${steps.map((s) => `<div class="step step-${esc(s.status)}"><span class="step-ic">${stepIconSvg(s.status)}</span><span class="step-tx">${esc(s.title)}</span></div>`).join("")}
+          </div>
+        </div>
+      `
+          : ""
+      }
+
+      ${
+        files.length > 0
+          ? `
+        <div class="section">
+          <div class="sec-head">
+            <span class="sec-label">改动文件</span>
+            <span class="sec-meta">${files.length} 个</span>
+          </div>
+          <div class="file-pills">
+            ${files.map((f) => `<span class="file-pill"><span class="cat-ic-edit">${ICONS.edit}</span><span class="mono">${esc(f)}</span></span>`).join("")}
+          </div>
+        </div>
+      `
+          : ""
+      }
+
+      ${
+        bgs.length > 0
+          ? `
+        <div class="section">
+          <div class="sec-head">
+            <span class="sec-label">后台任务</span>
+            <span class="sec-meta">${bgs.length} 个</span>
+          </div>
+          <div class="list-group">${bgs.map(renderBgRow).join("")}</div>
+        </div>
+      `
+          : ""
+      }
+
+      ${
+        ops.length > 0
+          ? `
+        <div class="section">
+          <div class="sec-head">
+            <span class="sec-label">本轮操作明细（点击展开）</span>
+            <span class="sec-meta">${ops.length} 条</span>
+          </div>
+          <div class="ops-wrap">${ops.map((o, idx) => renderOpRow(o, idx + 1000)).join("")}</div>
+        </div>
+      `
+          : ""
+      }
     `;
   }
 
@@ -378,11 +461,19 @@
         </div>
       `;
     } else if (state.activeTab === "history") {
-      tabHtml = `
-        <div class="notes-list">
-          ${historyTurns.length > 0 ? historyTurns.map(renderHistoryTurn).join("") : `<div class="empty-inline">当前是本对话第 1 轮，暂无历史记录</div>`}
-        </div>
-      `;
+      const activeHist =
+        state.selectedHistoryTurn !== null
+          ? historyTurns.find((h) => h.turnIndex === state.selectedHistoryTurn)
+          : null;
+      if (activeHist) {
+        tabHtml = renderHistoryDetail(activeHist);
+      } else {
+        tabHtml = `
+          <div class="notes-list">
+            ${historyTurns.length > 0 ? historyTurns.map(renderHistoryCard).join("") : `<div class="empty-inline">当前是本对话第 1 轮，暂无历史记录</div>`}
+          </div>
+        `;
+      }
     }
 
     root.innerHTML = `
@@ -456,7 +547,11 @@
     if (btnAll) btnAll.onclick = () => { state.showRawThoughts = true; render(); };
 
     document.querySelectorAll("[data-tab]").forEach((btn) => {
-      btn.onclick = () => { state.activeTab = btn.getAttribute("data-tab"); render(); };
+      btn.onclick = () => {
+        state.activeTab = btn.getAttribute("data-tab");
+        if (state.activeTab !== "history") state.selectedHistoryTurn = null;
+        render();
+      };
     });
 
     const inpSearch = document.getElementById("inp-search");
@@ -495,11 +590,17 @@
       };
     });
 
-    document.querySelectorAll("[data-ht-key]").forEach((row) => {
+    const btnBack = document.getElementById("btn-back-history");
+    if (btnBack) {
+      btnBack.onclick = () => {
+        state.selectedHistoryTurn = null;
+        render();
+      };
+    }
+
+    document.querySelectorAll("[data-ht-open]").forEach((row) => {
       row.onclick = () => {
-        const key = row.getAttribute("data-ht-key");
-        if (state.expandedHistory.has(key)) state.expandedHistory.delete(key);
-        else state.expandedHistory.add(key);
+        state.selectedHistoryTurn = Number(row.getAttribute("data-ht-open"));
         render();
       };
     });
@@ -512,10 +613,10 @@
       const convId = getConversationId();
       if (convId !== state.lastConvId) {
         state.lastConvId = convId;
+        state.selectedHistoryTurn = null;
         state.expandedOps.clear();
         state.expandedBg.clear();
         state.expandedNotes.clear();
-        state.expandedHistory.clear();
       }
       const qs = new URLSearchParams();
       if (convId) qs.set("conversationId", convId);
