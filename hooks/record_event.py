@@ -161,6 +161,8 @@ def main() -> None:
         state["status"] = "idle" if fully_idle else "background_waiting"
         state["terminationReason"] = reason
         state["fullyIdle"] = fully_idle
+        if fully_idle:
+            state["lastFullyIdleAt"] = now
         in_flight.clear()
         record["terminationReason"] = reason
         record["fullyIdle"] = fully_idle

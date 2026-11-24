@@ -240,6 +240,12 @@ export function parseTranscript(convId, transcriptPath) {
               title: String(s?.title || ""),
               status: String(s?.status || "pending"),
             }));
+          } else if (name === "manage_task" && parsed.args?.Action === "kill" && parsed.args?.TaskId) {
+            const killed = bgTasks.get(String(parsed.args.TaskId));
+            if (killed) {
+              killed.status = "done";
+              killed.lastNote = "已终止";
+            }
           }
           const op = {
             stepIdx,
@@ -425,16 +431,32 @@ export function getConversationDetail(dataDir, convId, opts = {}) {
   const turnEndRefMs = hook?.status === "idle" && curTurn?.lastActivityMs ? curTurn.lastActivityMs : nowMs;
   const turnDurationSec = Math.max(0, Math.round((turnEndRefMs - turnStartMs) / 1000));
 
-  // Current turn background tasks (+ any still-running background tasks in this conversation)
+  // Current turn background tasks (+ any genuinely still-running background tasks in this conversation)
   const curBgIds = new Set(curTurn?.bgTaskIds || []);
+  const curTurnIdx = curTurn?.turnIndex || 1;
+  const lastFullyIdleMs = hook?.lastFullyIdleAt
+    ? Math.round(hook.lastFullyIdleAt * 1000)
+    : (hook?.fullyIdle && hook?.lastEventAt ? Math.round(hook.lastEventAt * 1000) : null);
+
   const currentBgTasks = Object.values(bgMap)
     .map((t) => {
       const elapsedSec = t.startedAtMs ? Math.max(0, Math.round((nowMs - t.startedAtMs) / 1000)) : null;
+      const sinceUpdateMs = nowMs - (t.lastUpdateMs || t.startedAtMs || nowMs);
       let status = t.status;
       let lastNote = t.lastNote;
-      if (status === "running" && t.isTimer && t.expectedDurationSec && elapsedSec !== null && elapsedSec > t.expectedDurationSec + 10) {
-        status = "done";
-        lastNote = "已触发";
+      if (status === "running") {
+        if (t.isTimer && t.expectedDurationSec && elapsedSec !== null && elapsedSec > t.expectedDurationSec + 10) {
+          status = "done";
+          lastNote = "已触发";
+        } else if (lastFullyIdleMs && t.startedAtMs && t.startedAtMs < lastFullyIdleMs) {
+          // Antigravity Stop hook confirmed fullyIdle=true after this task started
+          status = "done";
+          lastNote = "已结束";
+        } else if (t.turnIndex < curTurnIdx && sinceUpdateMs > 2 * 3600 * 1000) {
+          // Stale ghost task from an earlier turn with >2h zero updates (e.g. missed exit after reconnect)
+          status = "done";
+          lastNote = "历史已失效";
+        }
       }
       return { ...t, status, lastNote, elapsedSec };
     })
