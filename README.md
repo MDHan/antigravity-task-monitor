@@ -4,9 +4,9 @@
 
 # Antigravity Task Monitor
 
-**为 Google Antigravity 2.0 打造的「任务进度看板」插件 · 严格会话隔离 · 5 分钟自动回报**
+**为 Google Antigravity 2.0 打造的「任务进度看板」插件 · 严格会话隔离 · 10 分钟自动回报**
 
-*A clean, session-isolated Google Antigravity 2.0 sidebar & global monitor plugin that tracks current-turn steps, Chinese-first stage updates, background jobs, and structured turn history—with 5-minute check-in rules for long-running tasks.*
+*A clean, session-isolated Google Antigravity 2.0 sidebar & global monitor plugin that tracks current-turn steps, Chinese-first stage updates, background jobs, and structured turn history—with 10-minute check-in rules for long-running tasks.*
 
 [![Antigravity 2.0](https://img.shields.io/badge/Antigravity-2.0_Plugin-2563eb?style=flat-square&logo=google&logoColor=white)](https://github.com/MDHan/antigravity-task-monitor)
 [![Session Isolated](https://img.shields.io/badge/Session-Isolated-059669?style=flat-square)](https://github.com/MDHan/antigravity-task-monitor)
@@ -39,11 +39,11 @@
   - **进展**：优先展示按用户语言（如中文）生成的**阶段进展与结论**，并支持一键切换查看模型内部英文思考原文。
   - **操作**：按时间倒序呈现本轮所有操作记录，配统一线性 SVG 图标，支持按「命令 / 修改 / 读取 / 报错」胶囊筛选及关键词搜索，点击展开完整命令或文件路径。
   - **历史**：将本对话之前的轮次按轮折叠收纳，点开即见该轮的结果摘要、去重改动文件标签、关键命令及耗时。
-- **长任务每 5 分钟自动回报进度（`rules/AGENTS.md`）**：
-  - 启用插件后自动约束耗时超过 5 分钟的后台任务（如模型训练/评测、远程 SSH/GPU 实验），按 5 分钟间隔自动检查并汇报进度，告别 30 分钟~1 小时静默失联。
+- **长任务每 10 分钟自动回报进度（`rules/AGENTS.md`）**：
+  - 启用插件后自动约束耗时超过 10 分钟的后台任务（如模型训练/评测、远程 SSH/GPU 实验），按 10 分钟间隔自动检查并汇报进度，告别 30 分钟~1 小时静默失联。
 - **Hooks 实时记录 & 看板零额外 Token 消耗**：
   - 通过 `SessionStart` / `PreInvocation` / `PostInvocation` / `PostToolUse` / `Stop` 本地落盘实时状态，不干扰工具权限弹窗，不弹冗余桌面通知。
-  - 看板每 3 秒自动刷新与 Hooks 采集均在本地完成，**0 额外 Token 消耗**（仅长任务运行超 5 分钟触发定时进度检查时产生常规轮次消耗）。
+  - 看板每 3 秒自动刷新与 Hooks 采集均在本地完成，**0 额外 Token 消耗**（仅长任务运行超 10 分钟触发定时进度检查时产生常规轮次消耗）。
 
 ---
 
@@ -109,7 +109,7 @@ antigravity-task-monitor/
 │   ├── logo.svg                       # 插件图标
 │   └── preview.png                    # 双栏界面预览图
 ├── rules/
-│   └── AGENTS.md                      # 长任务 5 分钟自动回报与进度同步规范
+│   └── AGENTS.md                      # 长任务 10 分钟自动回报与进度同步规范
 ├── hooks/
 │   └── record_event.py                # 轻量本地状态采集脚本
 ├── sidecars/
@@ -135,7 +135,7 @@ antigravity-task-monitor/
 
 ### Overview
 
-**Antigravity Task Monitor** is a session-isolated task progress monitor plugin for **Google Antigravity 2.0**. Built for long-running workflows (model training, remote SSH/GPU jobs, multi-step coding), it automatically binds to the active conversation in the right auxiliary pane, separates **current-turn progress** from **structured turn history**, surfaces readable stage summaries, and ships with a 5-minute check-in rule (`rules/AGENTS.md`) so background tasks never go silent for an hour.
+**Antigravity Task Monitor** is a session-isolated task progress monitor plugin for **Google Antigravity 2.0**. Built for long-running workflows (model training, remote SSH/GPU jobs, multi-step coding), it automatically binds to the active conversation in the right auxiliary pane, separates **current-turn progress** from **structured turn history**, surfaces readable stage summaries, and ships with a 10-minute check-in rule (`rules/AGENTS.md`) so background tasks never go silent for an hour.
 
 ### Quick Install
 

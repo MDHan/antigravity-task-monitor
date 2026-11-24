@@ -460,8 +460,8 @@ export function getConversationDetail(dataDir, convId, opts = {}) {
 
   let waitLevel = "ok";
   if (isMonitoringActive) {
-    if (idleSec >= 900) waitLevel = "alert";
-    else if (idleSec >= 300) waitLevel = "warn";
+    if (idleSec >= 1200) waitLevel = "alert";
+    else if (idleSec >= 600) waitLevel = "warn";
   }
 
   // Current turn operations

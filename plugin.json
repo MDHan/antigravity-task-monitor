@@ -1,7 +1,7 @@
 {
   "name": "task-monitor",
   "displayName": "任务进度看板",
-  "description": "自动跟踪当前对话的执行步骤、阶段结论、操作记录与后台任务，并在长任务期间每 5 分钟自动回报进度。",
+  "description": "自动跟踪当前对话的执行步骤、阶段结论、操作记录与后台任务，并在长任务期间每 10 分钟自动回报进度。",
   "version": "1.3.0",
   "author": "MDHan",
   "logo": "assets/logo.svg",
